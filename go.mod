@@ -1,0 +1,1 @@
+module cover-letter-templates

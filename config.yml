@@ -1,0 +1,49 @@
+name: "John Doe"
+email: "john.doe@example.com"
+phone: "123-456-7890"
+address: "123 Main St, Anytown, USA"
+website: "johndoe.com"
+github: "github.com/johndoe"
+
+education:
+  - institution: "University of Go"
+    degree: "B.S. in Computer Science"
+    start_date: "2018"
+    end_date: "2022"
+    gpa: "3.8"
+
+experience:
+  - company: "Go Corp"
+    position: "Software Engineer"
+    start_date: "June 2022"
+    end_date: "Present"
+    responsibilities:
+      - "Developed and maintained web applications using Go."
+      - "Collaborated with cross-functional teams to define, design, and ship new features."
+      - "Wrote clean, maintainable, and efficient code."
+  - company: "Test Inc."
+    position: "Software Engineer Intern"
+    start_date: "May 2021"
+    end_date: "August 2021"
+    responsibilities:
+      - "Assisted in the development of a new testing framework."
+      - "Wrote and executed unit and integration tests."
+
+skills:
+  - "Go"
+  - "Python"
+  - "Docker"
+  - "Kubernetes"
+  - "SQL"
+  - "Git"
+
+projects:
+  - name: "Cover Letter Generator"
+    description: "a tool to generate cover letters from a YAML resume file and a template"
+    url: "github.com/johndoe/cover-letter-generator"
+  - name: "Personal Website"
+    description: "my personal portfolio website"
+    url: "johndoe.com"
+
+company_to_apply_to: "Google"
+role_to_apply_to: "Software Engineer"
