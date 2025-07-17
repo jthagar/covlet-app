@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"text/template"
@@ -51,7 +51,7 @@ type Project struct {
 
 func main() {
 	// Read the resume data from the YAML file.
-	yamlFile, err := os.ReadFile("resume.yaml")
+	yamlFile, err := os.ReadFile("config.yaml")
 	if err != nil {
 		log.Fatalf("Error reading YAML file: %v", err)
 	}
@@ -64,7 +64,7 @@ func main() {
 	}
 
 	// Read the cover letter template.
-	templateFile, err := os.ReadFile("cover_letter.tmpl")
+	templateFile, err := os.ReadFile("cover_letter.tpl")
 	if err != nil {
 		log.Fatalf("Error reading template file: %v", err)
 	}
