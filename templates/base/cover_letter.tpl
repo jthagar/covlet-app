@@ -19,7 +19,10 @@ In my most recent role at {{ (index .Experience 0).Company }}, my responsibiliti
 
 My technical skills include {{ range $i, $skill := .Skills }}{{ if $i }}, {{ end }}{{ $skill }}{{ end }}.
 
-One of my key projects has been "{{ (index .Projects 0).Name }}", which is {{ (index .Projects 0).Description }}. You can find more details at {{ (index .Projects 0).Url }}.
+{{ with (index .Projects 0) }}
+One of my key projects has been "{{ .Name }}", which is {{ .Description }}.
+{{ end }}
+
 
 I am very enthusiastic about the opportunity to bring my skills to {{.CompanyToApplyTo}}. Thank you for your time and consideration.
 

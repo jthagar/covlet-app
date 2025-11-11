@@ -40,7 +40,7 @@ skills:
 projects:
   - name: "Cover Letter Generator"
     description: "a tool to generate cover letters from a YAML resume file and a template"
-    url: "github.com/johndoe/cover-letter-generator"
+    url: "https://www.github.com/johndoe/cover-letter-generator"
   - name: "Personal Website"
     description: "my personal portfolio website"
     url: "johndoe.com"

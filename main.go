@@ -1,46 +1,17 @@
 package main
 
 import (
-	"fmt"
-	"gopkg.in/yaml.v3"
+	"image/color"
 	"log"
-	"os"
-	"text/template"
+	"time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
-
-// Resume holds all the information from the YAML file.
-type Resume struct {
-	Name             string       `yaml:"name"`
-	Email            string       `yaml:"email"`
-	Phone            string       `yaml:"phone"`
-	Address          string       `yaml:"address"`
-	Website          string       `yaml:"website"`
-	Github           string       `yaml:"github"`
-	Education        []Education  `yaml:"education"`
-	Experience       []Experience `yaml:"experience"`
-	Skills           []string     `yaml:"skills"`
-	Projects         []Project    `yaml:"projects"`
-	CompanyToApplyTo string       `yaml:"company_to_apply_to"`
-	RoleToApplyTo    string       `yaml:"role_to_apply_to"`
-}
-
-// Education represents a single educational entry.
-type Education struct {
-	Institution string `yaml:"institution"`
-	Degree      string `yaml:"degree"`
-	StartDate   string `yaml:"start_date"`
-	EndDate     string `yaml:"end_date"`
-	GPA         string `yaml:"gpa"`
-}
-
-// Experience represents a single work experience entry.
-type Experience struct {
-	Company          string   `yaml:"company"`
-	Position         string   `yaml:"position"`
-	StartDate        string   `yaml:"start_date"`
-	EndDate          string   `yaml:"end_date"`
-	Responsibilities []string `yaml:"responsibilities"`
-}
 
 // Project represents a single project entry.
 type Project struct {
@@ -50,35 +21,37 @@ type Project struct {
 }
 
 func main() {
-	// Read the resume data from the YAML file.
-	yamlFile, err := os.ReadFile("config.yaml")
-	if err != nil {
-		log.Fatalf("Error reading YAML file: %v", err)
-	}
+	// err := cli.Run()
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
-	// Parse the YAML data into our Resume struct.
-	var resume Resume
-	err = yaml.Unmarshal(yamlFile, &resume)
-	if err != nil {
-		log.Fatalf("Error unmarshalling YAML: %v", err)
-	}
+	a := app.New()
+	w := a.NewWindow("Covlet")
+	w.Resize(fyne.NewSize(640, 480))
 
-	// Read the cover letter template.
-	templateFile, err := os.ReadFile("cover_letter.tpl")
-	if err != nil {
-		log.Fatalf("Error reading template file: %v", err)
-	}
+	message := canvas.NewText("Hello", color.White)
+	toolbar := widget.NewToolbar(
+		widget.NewToolbarAction(theme.DocumentCreateIcon(), func() {
+			log.Println("New document")
+		}),
+		widget.NewToolbarSeparator(),
+		widget.NewToolbarAction(theme.ContentCutIcon(), func() {}),
+		widget.NewToolbarAction(theme.ContentCopyIcon(), func() {}),
+		widget.NewToolbarAction(theme.ContentPasteIcon(), func() {}),
+		widget.NewToolbarSpacer(),
+		widget.NewToolbarAction(theme.HelpIcon(), func() {
+			log.Println("Display help")
+		}),
+	)
+	button := widget.NewButton("Update", func() {
+		formatted := time.Now().Format("Time: 03:04:05")
+		message.Text = formatted
+		message.Refresh()
+	})
 
-	// Create a new template and parse the template file content.
-	t, err := template.New("cover_letter").Parse(string(templateFile))
-	if err != nil {
-		log.Fatalf("Error parsing template: %v", err)
-	}
-
-	// Execute the template with the resume data and print the output to the console.
-	fmt.Println("--- Generated Cover Letter ---")
-	err = t.Execute(os.Stdout, resume)
-	if err != nil {
-		log.Fatalf("Error executing template: %v", err)
-	}
+	left := widget.NewLabel("Left")
+	content := container.NewBorder(toolbar, nil, left, nil, button, message)
+	w.SetContent(content)
+	w.ShowAndRun()
 }
