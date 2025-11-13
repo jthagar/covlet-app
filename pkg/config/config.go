@@ -47,33 +47,35 @@ type Project struct {
 	URL         string `yaml:"url"`
 }
 
-// Config handles loading of the resume configuration
+// Config represents the full application configuration file
+// home_dir is stored at the top level, while Resume fields are inlined at the root as well.
 type Config struct {
-	Resume Resume
+	HomeDir string `yaml:"home_dir"`
+	Resume  Resume `yaml:",inline"`
 }
-
-// TODO: figure out why URLs don't work for the template generator
 
 // LoadConfig reads and parses the YAML configuration file
 func LoadConfig(filename string) (*Config, error) {
 	yamlFile, err := os.ReadFile(filename)
-
-	// if file does not exist, run through a setup and create file
-	// ask for user input to create the directory and file
 	if err != nil {
 		return nil, err
 	}
 
-	var resume Resume
-	if err = yaml.Unmarshal(yamlFile, &resume); err != nil {
+	var cfg Config
+	if err = yaml.Unmarshal(yamlFile, &cfg); err != nil {
 		return nil, err
 	}
 
-	return &Config{Resume: resume}, nil
+	return &cfg, nil
 }
 
+// SaveConfig writes the configuration back to the given YAML file.
 func (c *Config) SaveConfig(filename string) error {
-	return nil
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, b, 0644)
 }
 
 func (c *Config) CreateConfig() error {
