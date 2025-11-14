@@ -1,353 +1,314 @@
 package gui
 
 import (
-	"bytes"
+	"cover-letter-templates/pkg/config"
 	"fmt"
+	"image/color"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
-
-	"cover-letter-templates/pkg/config"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
+type smallTheme struct{ base fyne.Theme }
+
+func (s *smallTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color { return s.base.Color(n, v) }
+func (s *smallTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return s.base.Icon(n) }
+func (s *smallTheme) Font(f fyne.TextStyle) fyne.Resource { return s.base.Font(f) }
+func (s *smallTheme) Size(n fyne.ThemeSizeName) float32 {
+	sz := s.base.Size(n)
+	if n == theme.SizeNameText {
+		if sz > 1 {
+			return sz - 1
+		}
+	}
+	return sz
+}
+
 func Run() error {
+	config.InitMainDir()
 	a := app.New()
+	// apply smaller text theme (one size smaller)
+	a.Settings().SetTheme(&smallTheme{base: theme.LightTheme()})
+
 	w := a.NewWindow("Covlet")
 	windowSize := fyne.NewSize(1000, 700)
 	w.Resize(windowSize)
 
-	// Load or initialize config with home_dir and ensure templates subfolder
-	cfg, err := config.LoadConfig("config.yml")
-	if err != nil {
-		// If file doesn't exist or fails to parse, start with empty config and initialize
-		cfg = &config.Config{}
-	}
+	// Build editor
+	editorContainer, editor := Editor(w)
 
-	if cfg.HomeDir == "" || !dirExists(cfg.HomeDir) {
-		if err := promptForHomeDir(w, cfg); err != nil {
-			// If the user cancels, still show the app, but many actions will prompt again
-			log.Println("home_dir not set:", err)
+	// ensure templates directory exists and helper to compute left/right roots
+	_, _ = config.EnsureTemplatesDir()
+	computeRoots := func() (string, string) {
+		root := config.TemplatesDir()
+		left := root
+		right := root
+		base := filepath.Join(root, "base")
+		if fi, err := os.Stat(base); err == nil && fi.IsDir() {
+			left = base
 		}
-	}
-	// Ensure templates subfolder under home_dir
-	homeTemplates := ""
-	if cfg.HomeDir != "" {
-		homeTemplates = filepath.Join(cfg.HomeDir, "templates")
-		_ = os.MkdirAll(homeTemplates, 0755)
-	}
-
- state := &editorState{
-		cfg:           cfg,
-		homeTemplates: homeTemplates,
+		partials := filepath.Join(root, "partials")
+		if fi, err := os.Stat(partials); err == nil && fi.IsDir() {
+			right = partials
+		}
+		return left, right
 	}
 
-	// Build editor + preview split view and toolbar wired to state
-	editor, preview, topBar := buildEditorUI(w, a, state)
-	state.editor = editor
-	state.preview = preview
+	// trees and panes
+	lRoot, rRoot := computeRoots()
+	leftTree := fileTree(lRoot, editor, w)
+	rightTree := fileTree(rRoot, editor, w)
 
-	editorContainer := container.NewHSplit(editor, preview)
-	editorContainer.Offset = 0.55
+	leftPane := container.NewBorder(widget.NewLabel("Templates Left"), nil, nil, nil, container.NewVScroll(leftTree))
+	rightPane := container.NewBorder(widget.NewLabel("Templates Right"), nil, nil, nil, container.NewVScroll(rightTree))
 
-	content := container.NewBorder(topBar, nil, nil, nil, editorContainer)
-	w.SetContent(content)
+	// dynamic resizable split panes
+	centerSplit := container.NewHSplit(leftPane, editorContainer)
+	centerSplit.Offset = 0.25
+	mainSplit := container.NewHSplit(centerSplit, rightPane)
+	mainSplit.Offset = 0.75
+
+	// Build main menu bar
+	toggleLeft := true
+	toggleRight := true
+
+	fileMenu := fyne.NewMenu("File",
+		fyne.NewMenuItem("New", func() { new(editor, w) }),
+		fyne.NewMenuItem("Open Folder…", func() {
+			dlg := dialog.NewFolderOpen(func(listable fyne.ListableURI, err error) {
+				if err != nil {
+					log.Println("Folder open error:", err)
+					return
+				}
+				if listable == nil { return }
+				if err := config.SetMainDir(listable.Path()); err != nil {
+					dialog.ShowError(err, w)
+					return
+				}
+				_, _ = config.EnsureTemplatesDir()
+				lRoot, rRoot := computeRoots()
+				leftTree.Root = lRoot
+				rightTree.Root = rRoot
+				leftTree.Refresh()
+				rightTree.Refresh()
+			}, w)
+			dlg.Show()
+		}),
+		fyne.NewMenuItem("Save", func() { _ = save(w, editor) }),
+		fyne.NewMenuItem("Save As…", func() { _ = saveAs(w, editor) }),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Quit", func() { w.Close() }),
+	)
+
+	editMenu := fyne.NewMenu("Edit",
+		fyne.NewMenuItem("Undo", func() { undo(editor) }),
+		fyne.NewMenuItem("Redo", func() { redo(editor) }),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Cut", func() {
+			if c := w.Canvas(); c != nil { if foc, ok := c.Focused().(*widget.Entry); ok { foc.TypedShortcut(&fyne.ShortcutCut{Clipboard: w.Clipboard()}) } }
+		}),
+		fyne.NewMenuItem("Copy", func() {
+			if c := w.Canvas(); c != nil { if foc, ok := c.Focused().(*widget.Entry); ok { foc.TypedShortcut(&fyne.ShortcutCopy{Clipboard: w.Clipboard()}) } }
+		}),
+		fyne.NewMenuItem("Paste", func() {
+			if c := w.Canvas(); c != nil { if foc, ok := c.Focused().(*widget.Entry); ok { foc.TypedShortcut(&fyne.ShortcutPaste{Clipboard: w.Clipboard()}) } }
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Find", func() { find(editor, w) }),
+	)
+
+	viewMenu := fyne.NewMenu("View",
+		fyne.NewMenuItem("Toggle Left Sidebar", func() {
+			toggleLeft = !toggleLeft
+			if toggleLeft { leftPane.Show() } else { leftPane.Hide() }
+		}),
+		fyne.NewMenuItem("Toggle Right Sidebar", func() {
+			toggleRight = !toggleRight
+			if toggleRight { rightPane.Show() } else { rightPane.Hide() }
+		}),
+		fyne.NewMenuItem("Reset Panes", func() {
+			leftPane.Show(); rightPane.Show();
+			centerSplit.Offset = 0.25; mainSplit.Offset = 0.75
+		}),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Light Theme", func() { a.Settings().SetTheme(&smallTheme{base: theme.LightTheme()}) }),
+		fyne.NewMenuItem("Dark Theme", func() { a.Settings().SetTheme(&smallTheme{base: theme.DarkTheme()}) }),
+	)
+
+	helpMenu := fyne.NewMenu("Help",
+		fyne.NewMenuItem("About", func() { dialog.ShowInformation("About", "Covlet - Cover Letter Templates Editor", w) }),
+		fyne.NewMenuItem("Shortcuts", func() {
+			dialog.ShowInformation("Shortcuts", "Ctrl+S Save\nCtrl+N New\nCtrl+F Find\nCtrl+U Undo\nCtrl+R Redo", w)
+		}),
+	)
+
+	w.SetMainMenu(fyne.NewMainMenu(fileMenu, editMenu, viewMenu, helpMenu))
+
+	w.SetContent(mainSplit)
 	w.ShowAndRun()
 	return nil
 }
 
-// promptForHomeDir asks the user to select a folder for home_dir and saves config.yml.
-func promptForHomeDir(w fyne.Window, cfg *config.Config) error {
-	// Offer a folder open dialog
-	var completed = make(chan struct{})
-	var retErr error
-	dlg := dialog.NewFolderOpen(func(list fyne.ListableURI, err error) {
-		defer close(completed)
+// fileTree builds a filesystem tree rooted at the given directory and loads
+// file content into the provided editor on selection.
+func fileTree(root string, editor *widget.Entry, w fyne.Window) *widget.Tree {
+	child := func(uid string) []string {
+		// uid is a full path
+		entries, err := os.ReadDir(uid)
 		if err != nil {
-			retErr = err
-			return
+			return []string{}
 		}
-		if list == nil {
-			retErr = fmt.Errorf("selection canceled")
-			return
-		}
-		p := list.Path()
-		if p == "" {
-			retErr = fmt.Errorf("invalid directory")
-			return
-		}
-		if err := os.MkdirAll(p, 0755); err != nil {
-			retErr = err
-			return
-		}
-		cfg.HomeDir = p
-		if err := cfg.SaveConfig("config.yml"); err != nil {
-			retErr = err
-			return
-		}
-		// create templates subfolder
-		_ = os.MkdirAll(filepath.Join(cfg.HomeDir, "templates"), 0755)
-		dialog.ShowInformation("Initialized", fmt.Sprintf("home_dir set to: %s", cfg.HomeDir), w)
-	}, w)
-	// Try to default to user home
-	if uhome, _ := os.UserHomeDir(); uhome != "" {
-		if l, err := storage.ListerForURI(storage.NewFileURI(uhome)); err == nil {
-			dlg.SetLocation(l)
-		}
-	}
-	dlg.Resize(fyne.NewSize(600, 400))
-	dlg.Show()
-	<-completed
-	return retErr
-}
-
-// state for the editor
- type editorState struct {
-	cfg           *config.Config
-	homeTemplates string
-	editor        *widget.Entry
-	preview      *widget.Entry
-}
-
-func buildEditorUI(w fyne.Window, a fyne.App, st *editorState) (*widget.Entry, *widget.Entry, *widget.Toolbar) {
-	// Editor
-	editor := widget.NewMultiLineEntry()
-	editor.SetPlaceHolder("Enter Go template here, e.g., {{ .Name }}")
-	editor.Wrapping = fyne.TextWrapWord
-	editor.OnChanged = func(s string) {
-		if len(s) > 0 {
-			lastChar := s[len(s)-1:]
-			switch lastChar {
-			case "{":
-				if len(undoText) > 0 {
-					if undoText[len(undoText)-1] != s {
-						editor.SetText(s + "}")
-					}
-				} else {
-					editor.SetText(s + "}")
-				}
-			case "(":
-				if len(undoText) > 0 {
-					if undoText[len(undoText)-1] != s {
-						editor.SetText(s + ")")
-					}
-				} else {
-					editor.SetText(s + ")")
-				}
-			case "[":
-				if len(undoText) > 0 {
-					if undoText[len(undoText)-1] != s {
-						editor.SetText(s + "]")
-					}
-				} else {
-					editor.SetText(s + "]")
-				}
+		var ids []string
+		for _, e := range entries {
+			// hide dot files
+			name := e.Name()
+			if len(name) > 0 && name[0] == '.' {
+				continue
 			}
-
-			if len(undoText) < 6 {
-				undoText = append(undoText, s)
-			} else {
-				undoText = append(undoText[1:], s)
+			ids = append(ids, filepath.Join(uid, name))
+		}
+		return ids
+	}
+	isBranch := func(uid string) bool {
+		fi, err := os.Stat(uid)
+		if err != nil {
+			return false
+		}
+		return fi.IsDir()
+	}
+	var t *widget.Tree
+	create := func(branch bool) fyne.CanvasObject {
+		name := widget.NewLabel("")
+		more := widget.NewButtonWithIcon("", theme.MoreVerticalIcon(), func() {})
+		more.Importance = widget.LowImportance
+		c := container.New(layout.NewHBoxLayout(), name, layout.NewSpacer(), more)
+		return c
+	}
+	update := func(uid string, branch bool, obj fyne.CanvasObject) {
+		c := obj.(*fyne.Container)
+		name := c.Objects[0].(*widget.Label)
+		more := c.Objects[2].(*widget.Button)
+		name.SetText(filepath.Base(uid))
+		if branch {
+			more.Show()
+			// bind click to create a file in this directory
+			dir := uid
+			more.OnTapped = func() {
+				showCreateFileDialog(w, dir, t)
 			}
+		} else {
+			more.Hide()
 		}
 	}
 
-	// Preview (read-only)
-	preview := widget.NewMultiLineEntry()
-	preview.SetPlaceHolder("Render preview will appear here")
-	preview.Wrapping = fyne.TextWrapWord
-	preview.Disable()
-
-	// Shortcuts
-	ctrlS := desktop.CustomShortcut{KeyName: fyne.KeyS, Modifier: fyne.KeyModifierControl}
-	w.Canvas().AddShortcut(&ctrlS, func(shortcut fyne.Shortcut) {
-		if err := guiSave(w, st, editor.Text); err != nil {
-			dialog.ShowError(err, w)
-		}
-	})
-	ctrlO := desktop.CustomShortcut{KeyName: fyne.KeyO, Modifier: fyne.KeyModifierControl}
-	w.Canvas().AddShortcut(&ctrlO, func(shortcut fyne.Shortcut) { guiOpen(w, st, editor) })
-	ctrlShiftS := desktop.CustomShortcut{KeyName: fyne.KeyS, Modifier: fyne.KeyModifierShift | fyne.KeyModifierControl}
-	w.Canvas().AddShortcut(&ctrlShiftS, func(shortcut fyne.Shortcut) {
-		guiSaveAs(w, st, editor.Text)
-	})
-	ctrlU := desktop.CustomShortcut{KeyName: fyne.KeyU, Modifier: fyne.KeyModifierControl}
-	w.Canvas().AddShortcut(&ctrlU, func(shortcut fyne.Shortcut) { undo(editor) })
-	ctrlR := desktop.CustomShortcut{KeyName: fyne.KeyR, Modifier: fyne.KeyModifierControl}
-	w.Canvas().AddShortcut(&ctrlR, func(shortcut fyne.Shortcut) { redo(editor) })
-
-	// Toolbar actions
-	renderAction := widget.NewToolbarAction(theme.MediaPlayIcon(), func() { guiRender(w, st, editor.Text, preview) })
-	openAction := widget.NewToolbarAction(theme.FolderOpenIcon(), func() { guiOpen(w, st, editor) })
-	saveAction := widget.NewToolbarAction(theme.DocumentSaveIcon(), func() {
-		if err := guiSave(w, st, editor.Text); err != nil {
-			dialog.ShowError(err, w)
-		}
-	})
- saveAsAction := widget.NewToolbarAction(theme.DocumentCreateIcon(), func() { guiSaveAs(w, st, editor.Text) })
-	settingsAction := widget.NewToolbarAction(theme.SettingsIcon(), func() {
-		if err := promptForHomeDir(w, st.cfg); err != nil {
-			dialog.ShowError(err, w)
+	t = widget.NewTree(child, isBranch, create, update)
+	t.Root = root
+	// Filter only template-like files for selection
+	t.OnSelected = func(uid string) {
+		fi, err := os.Stat(uid)
+		if err != nil || fi.IsDir() {
 			return
 		}
-		st.homeTemplates = filepath.Join(st.cfg.HomeDir, "templates")
-		_ = os.MkdirAll(st.homeTemplates, 0755)
-	})
-	help := widget.NewToolbarAction(theme.HelpIcon(), func() {
-		dialog.ShowInformation("Help", "Type templates using Go text/template syntax. Click Render to preview using data from config.yml.", w)
-	})
-	menu := widget.NewToolbar(openAction, saveAction, saveAsAction, renderAction, settingsAction, &widget.ToolbarSeparator{}, help)
-
-	return editor, preview, menu
-}
-
-// Render current editor content to preview using cfg.Resume
-func guiRender(w fyne.Window, st *editorState, tplText string, preview *widget.Entry) {
-	if st.cfg == nil {
-		dialog.ShowError(fmt.Errorf("config not loaded"), w)
-		return
-	}
-	// If home_dir is not set, prompt
-	if st.cfg.HomeDir == "" || !dirExists(st.cfg.HomeDir) {
-		if err := promptForHomeDir(w, st.cfg); err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
-		st.homeTemplates = filepath.Join(st.cfg.HomeDir, "templates")
-		_ = os.MkdirAll(st.homeTemplates, 0755)
-	}
-	// Execute template
-	t, err := template.New("editor").Parse(tplText)
-	if err != nil {
-		dialog.ShowError(err, w)
-		return
-	}
-	var out bytes.Buffer
-	if err := t.Execute(&out, st.cfg.Resume); err != nil {
-		dialog.ShowError(err, w)
-		return
-	}
-	preview.SetText(out.String())
-}
-
-// Open a template file under homeTemplates
-func guiOpen(w fyne.Window, st *editorState, editor *widget.Entry) {
-	if st.cfg.HomeDir == "" || !dirExists(st.cfg.HomeDir) {
-		if err := promptForHomeDir(w, st.cfg); err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
-		st.homeTemplates = filepath.Join(st.cfg.HomeDir, "templates")
-		_ = os.MkdirAll(st.homeTemplates, 0755)
-	}
-
-	dlg := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
-		if err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
-		if r == nil {
-			return
-		}
-		defer r.Close()
-		data, err := io.ReadAll(r)
-		if err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
-		editor.SetText(string(data))
-		currentPath = r.URI().Path()
-	}, w)
-	// Filter extensions
-	dlg.SetFilter(storage.NewExtensionFileFilter([]string{".tpl", ".tmpl", ".gotmpl"}))
-	// Limit to homeTemplates as starting location
-	if st.homeTemplates != "" {
-		if l, err := storage.ListerForURI(storage.NewFileURI(st.homeTemplates)); err == nil {
-			dlg.SetLocation(l)
-		}
-	}
-	dlg.Resize(fyne.NewSize(800, 600))
-	dlg.Show()
-}
-
-// Save current content; if no currentPath, falls back to Save As
-func guiSave(w fyne.Window, st *editorState, text string) error {
-	if currentPath == "" {
-		guiSaveAs(w, st, text)
-		return nil
-	}
-	// ensure file remains within homeTemplates (defensive)
-	if st.homeTemplates != "" {
-		if !strings.HasPrefix(filepath.Clean(currentPath), filepath.Clean(st.homeTemplates)+string(os.PathSeparator)) && filepath.Clean(currentPath) != filepath.Clean(st.homeTemplates) {
-			return fmt.Errorf("saving outside home_dir/templates is not allowed")
-		}
-	}
-	return os.WriteFile(currentPath, []byte(text), 0644)
-}
-
-func guiSaveAs(w fyne.Window, st *editorState, text string) {
-	if st.cfg.HomeDir == "" || !dirExists(st.cfg.HomeDir) {
-		if err := promptForHomeDir(w, st.cfg); err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
-		st.homeTemplates = filepath.Join(st.cfg.HomeDir, "templates")
-		_ = os.MkdirAll(st.homeTemplates, 0755)
-	}
-	var completed = make(chan struct{})
-	dlg := dialog.NewFileSave(func(uc fyne.URIWriteCloser, err error) {
-		defer close(completed)
-		if err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
-		if uc == nil {
-			return
-		}
-		p := uc.URI().Path()
-		// Enforce saving under homeTemplates
-		if st.homeTemplates != "" {
-			cleanHome := filepath.Clean(st.homeTemplates)
-			cleanP := filepath.Clean(p)
-			if !strings.HasPrefix(cleanP, cleanHome+string(os.PathSeparator)) && cleanP != cleanHome {
-				dialog.ShowError(fmt.Errorf("please save within %s", st.homeTemplates), w)
+		// only open known text types (.tpl, .tmpl, .txt, .md, .gohtml)
+		ext := filepath.Ext(uid)
+		switch ext {
+		case ".tpl", ".tmpl", ".txt", ".md", ".gohtml", ".html":
+			b, err := os.ReadFile(uid)
+			if err != nil {
+				dialog.ShowError(err, w)
 				return
 			}
-		}
-		if !strings.HasSuffix(strings.ToLower(p), ".tpl") && !strings.HasSuffix(strings.ToLower(p), ".tmpl") && !strings.HasSuffix(strings.ToLower(p), ".gotmpl") {
-			p = p + ".tpl"
-		}
-		if err := os.WriteFile(p, []byte(text), 0644); err != nil {
-			dialog.ShowError(err, w)
-			return
-		}
-		currentPath = p
-		uc.Close()
-	}, w)
-	// Default location to homeTemplates
-	if st.homeTemplates != "" {
-		if l, err := storage.ListerForURI(storage.NewFileURI(st.homeTemplates)); err == nil {
-			dlg.SetLocation(l)
+			editor.SetText(string(b))
+			currentPath = uid
 		}
 	}
-	dlg.SetFileName("untitled.tpl")
-	dlg.Resize(fyne.NewSize(800, 600))
-	dlg.Show()
+	return t
 }
 
-// helpers
-func dirExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && fi.IsDir()
+// showCreateFileDialog prompts for a new file name in the given directory and creates it.
+func showCreateFileDialog(w fyne.Window, dir string, t *widget.Tree) {
+	nameEntry := widget.NewEntry()
+	nameEntry.SetPlaceHolder("new_file.tpl")
+	dialog.ShowForm("Create New File", "Create", "Cancel",
+		[]*widget.FormItem{{Text: "File name", Widget: nameEntry}},
+		func(confirm bool) {
+			if !confirm {
+				return
+			}
+			name := strings.TrimSpace(nameEntry.Text)
+			if name == "" {
+				dialog.ShowError(fmt.Errorf("file name cannot be empty"), w)
+				return
+			}
+			if strings.ContainsAny(name, "/\\") {
+				dialog.ShowError(fmt.Errorf("file name must not contain path separators"), w)
+				return
+			}
+			// default extension if none provided
+			if !strings.Contains(name, ".") {
+				name += ".tpl"
+			}
+			full := filepath.Join(dir, name)
+			if _, err := os.Stat(full); err == nil {
+				dialog.ShowError(fmt.Errorf("file already exists: %s", name), w)
+				return
+			}
+			if err := os.WriteFile(full, []byte(""), 0o644); err != nil {
+				dialog.ShowError(err, w)
+				return
+			}
+			// refresh tree and reveal new file
+			t.OpenBranch(dir)
+			t.Refresh()
+			// optionally select the new file to make it visible
+			t.Select(full)
+		}, w)
+}
+
+func NewFileDialog(context fyne.App) {
+	window := context.NewWindow("File Explorer")
+	fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+		if err != nil {
+			fmt.Println("Error", err)
+			window.Close()
+			return
+		}
+		if reader == nil {
+			fmt.Println("No File Selected")
+			window.Close()
+			return
+		}
+		fmt.Println("File Selected: ", reader.URI())
+
+		// read file content
+		data, err := io.ReadAll(reader)
+		defer reader.Close()
+
+		if err != nil {
+			fmt.Println("Error reading file", err)
+			window.Close()
+			return
+		}
+		fmt.Println("File Content: ", string(data))
+		window.Close()
+		return
+
+	}, window)
+
+	windowSize := fyne.NewSize(800, 600)
+	window.Resize(windowSize)
+
+	window.Show()
+	fileDialog.Show()
+	fileDialog.Resize(windowSize)
 }
