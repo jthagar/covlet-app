@@ -19,47 +19,43 @@ type Char struct {
 	Col  int
 }
 
-var currentPath string = ""
-var undoText []string = []string{}
-var redoText []string = []string{}
-
-func undo(entry *widget.Entry) {
-	if len(undoText) > 0 {
-		if len(redoText) < 6 {
-			redoText = append(redoText, entry.Text)
+func (e *TextEditor) undo() {
+	if len(e.undoText) > 0 {
+		if len(e.redoText) < 6 {
+			e.redoText = append(e.redoText, e.editor.Text)
 		} else {
-			redoText = redoText[1:]
-			redoText = append(redoText, entry.Text)
+			e.redoText = e.redoText[1:]
+			e.redoText = append(e.redoText, e.editor.Text)
 		}
-		entry.SetText(undoText[len(undoText)-1])
-		undoText = undoText[:len(undoText)-1]
+		e.editor.SetText(e.undoText[len(e.undoText)-1])
+		e.undoText = e.undoText[:len(e.undoText)-1]
 	}
 }
 
-func redo(entry *widget.Entry) {
-	if len(redoText) > 0 {
-		undoText = append(undoText, entry.Text)
-		entry.SetText(redoText[len(redoText)-1])
-		redoText = redoText[:len(redoText)-1]
+func (e *TextEditor) redo() {
+	if len(e.redoText) > 0 {
+		e.undoText = append(e.undoText, e.editor.Text)
+		e.editor.SetText(e.redoText[len(e.redoText)-1])
+		e.redoText = e.redoText[:len(e.redoText)-1]
 	}
 }
 
 // untested, and might break
-func find(entry *widget.Entry, w fyne.Window) {
+func (e *TextEditor) find(w fyne.Window) {
 	s := &widget.Entry{Text: "Enter text to search for"}
 	dialog.ShowForm("Find", "Search", "Cancel",
 		[]*widget.FormItem{
 			{Text: "Find:", Widget: s},
 		}, func(bool) {
-			index := strings.Index(entry.Text, s.Text)
+			index := strings.Index(e.editor.Text, s.Text)
 			if index != -1 {
-				row := strings.Count(entry.Text[:index], "\n")
-				foundedLine := strings.Split(entry.Text[:index], "\n")[row]
+				row := strings.Count(e.editor.Text[:index], "\n")
+				foundedLine := strings.Split(e.editor.Text[:index], "\n")[row]
 				col := len(foundedLine)
-				w.Canvas().Focus(entry)
-				entry.CursorRow = row
-				entry.CursorColumn = col
-				entry.Refresh()
+				w.Canvas().Focus(e.editor)
+				e.editor.CursorRow = row
+				e.editor.CursorColumn = col
+				e.editor.Refresh()
 				dialog.ShowInformation("Found", fmt.Sprintf("Found '%s' at %d (row: %d, col: %d)", s.Text, index, row, col), w)
 			} else {
 				dialog.ShowInformation("Not found", fmt.Sprintf("Could not find '%s'", s.Text), w)
@@ -68,9 +64,9 @@ func find(entry *widget.Entry, w fyne.Window) {
 }
 
 // I don't fully understand this function, other than it would create a new file I guess
-func new(entry *widget.Entry, w fyne.Window) {
-	currentPath = ""
-	redoText = []string{}
+func (e *TextEditor) new(w fyne.Window) {
+	e.currentPath = ""
+	e.redoText = []string{}
 
 	dialog.ShowFileSave(func(uc fyne.URIWriteCloser, err error) {
 		if err != nil {
@@ -78,30 +74,30 @@ func new(entry *widget.Entry, w fyne.Window) {
 			return
 		}
 		if uc != nil {
-			currentPath = uc.URI().Path()
+			e.currentPath = uc.URI().Path()
 		}
 	}, w)
 }
 
-func save(w fyne.Window, entry *widget.Entry) error {
-	txt := entry.Text
+func (e *TextEditor) save(w fyne.Window) error {
+	txt := e.editor.Text
 	txtbyte := []byte(txt)
 
-	if len(currentPath) > 0 {
-		newerr := ioutil.WriteFile(currentPath, txtbyte, 0644)
+	if len(e.currentPath) > 0 {
+		newerr := ioutil.WriteFile(e.currentPath, txtbyte, 0644)
 		if newerr != nil {
 			log.Fatal(newerr)
 			return newerr
 		}
 	} else {
-		return saveAs(w, entry)
+		return e.saveAs(w)
 	}
 
 	return nil
 }
 
-func saveAs(w fyne.Window, entry *widget.Entry) error {
-	txt := entry.Text
+func (e *TextEditor) saveAs(w fyne.Window) error {
+	txt := e.editor.Text
 	txtbyte := []byte(txt)
 	dialog.ShowFileSave(func(uc fyne.URIWriteCloser, err error) {
 		if err != nil {
@@ -113,7 +109,7 @@ func saveAs(w fyne.Window, entry *widget.Entry) error {
 				// ensure parent dir exists via fyne storage
 				_, _ = uc.Write(txtbyte)
 				_ = uc.Close()
-				currentPath = uc.URI().Path()
+				e.currentPath = uc.URI().Path()
 			} else {
 				// fallback
 				newerr := ioutil.WriteFile(uc.URI().Path(), txtbyte, 0644)
@@ -121,7 +117,7 @@ func saveAs(w fyne.Window, entry *widget.Entry) error {
 					log.Fatal(newerr)
 					return
 				}
-				currentPath = uc.URI().Path()
+				e.currentPath = uc.URI().Path()
 			}
 		}
 	}, w)
@@ -129,11 +125,11 @@ func saveAs(w fyne.Window, entry *widget.Entry) error {
 }
 
 // wrapAtCursor wraps the current word at the cursor with prefix/suffix.
-func wrapAtCursor(entry *widget.Entry, prefix, suffix string) {
+func wrapAtCursor(entry *TextEditor, prefix, suffix string) {
 	// Calculate absolute index from CursorRow/Column
-	text := entry.Text
-	row := entry.CursorRow
-	col := entry.CursorColumn
+	text := entry.editor.Text
+	row := entry.editor.CursorRow
+	col := entry.editor.CursorColumn
 	// find index of start of row
 	abs := 0
 	rows := strings.Split(text, "\n")
@@ -174,11 +170,11 @@ func wrapAtCursor(entry *widget.Entry, prefix, suffix string) {
 	b.WriteString(text[start:end])
 	b.WriteString(suffix)
 	b.WriteString(text[end:])
-	entry.SetText(b.String())
+	entry.editor.SetText(b.String())
 	// restore cursor somewhere sensible
-	entry.CursorRow = row
-	entry.CursorColumn = col + len(prefix)
-	entry.Refresh()
+	entry.editor.CursorRow = row
+	entry.editor.CursorColumn = col + len(prefix)
+	entry.editor.Refresh()
 }
 
 // custom simple icons for Bold/Italic/Strikethrough using inline SVGs

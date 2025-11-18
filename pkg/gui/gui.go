@@ -21,9 +21,11 @@ import (
 
 type smallTheme struct{ base fyne.Theme }
 
-func (s *smallTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color { return s.base.Color(n, v) }
+func (s *smallTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
+	return s.base.Color(n, v)
+}
 func (s *smallTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return s.base.Icon(n) }
-func (s *smallTheme) Font(f fyne.TextStyle) fyne.Resource { return s.base.Font(f) }
+func (s *smallTheme) Font(f fyne.TextStyle) fyne.Resource     { return s.base.Font(f) }
 func (s *smallTheme) Size(n fyne.ThemeSizeName) float32 {
 	sz := s.base.Size(n)
 	if n == theme.SizeNameText {
@@ -38,14 +40,14 @@ func Run() error {
 	config.InitMainDir()
 	a := app.New()
 	// apply smaller text theme (one size smaller)
-	a.Settings().SetTheme(&smallTheme{base: theme.LightTheme()})
+	a.Settings().SetTheme(&smallTheme{base: theme.DefaultTheme()})
 
 	w := a.NewWindow("Covlet")
 	windowSize := fyne.NewSize(1000, 700)
 	w.Resize(windowSize)
 
 	// Build editor
-	editorContainer, editor := Editor(w)
+	editorContainer, editor := NewEditor(w)
 
 	// ensure templates directory exists and helper to compute left/right roots
 	_, _ = config.EnsureTemplatesDir()
@@ -83,14 +85,16 @@ func Run() error {
 	toggleRight := true
 
 	fileMenu := fyne.NewMenu("File",
-		fyne.NewMenuItem("New", func() { new(editor, w) }),
+		fyne.NewMenuItem("New", func() { editor.new(w) }),
 		fyne.NewMenuItem("Open Folder…", func() {
 			dlg := dialog.NewFolderOpen(func(listable fyne.ListableURI, err error) {
 				if err != nil {
 					log.Println("Folder open error:", err)
 					return
 				}
-				if listable == nil { return }
+				if listable == nil {
+					return
+				}
 				if err := config.SetMainDir(listable.Path()); err != nil {
 					dialog.ShowError(err, w)
 					return
@@ -104,41 +108,63 @@ func Run() error {
 			}, w)
 			dlg.Show()
 		}),
-		fyne.NewMenuItem("Save", func() { _ = save(w, editor) }),
-		fyne.NewMenuItem("Save As…", func() { _ = saveAs(w, editor) }),
+		fyne.NewMenuItem("Save", func() { _ = editor.save(w) }),
+		fyne.NewMenuItem("Save As…", func() { _ = editor.saveAs(w) }),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Quit", func() { w.Close() }),
 	)
 
 	editMenu := fyne.NewMenu("Edit",
-		fyne.NewMenuItem("Undo", func() { undo(editor) }),
-		fyne.NewMenuItem("Redo", func() { redo(editor) }),
+		fyne.NewMenuItem("Undo", func() { editor.undo() }),
+		fyne.NewMenuItem("Redo", func() { editor.redo() }),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Cut", func() {
-			if c := w.Canvas(); c != nil { if foc, ok := c.Focused().(*widget.Entry); ok { foc.TypedShortcut(&fyne.ShortcutCut{Clipboard: w.Clipboard()}) } }
+			if c := w.Canvas(); c != nil {
+				if foc, ok := c.Focused().(*widget.Entry); ok {
+					foc.TypedShortcut(&fyne.ShortcutCut{Clipboard: w.Clipboard()})
+				}
+			}
 		}),
 		fyne.NewMenuItem("Copy", func() {
-			if c := w.Canvas(); c != nil { if foc, ok := c.Focused().(*widget.Entry); ok { foc.TypedShortcut(&fyne.ShortcutCopy{Clipboard: w.Clipboard()}) } }
+			if c := w.Canvas(); c != nil {
+				if foc, ok := c.Focused().(*widget.Entry); ok {
+					foc.TypedShortcut(&fyne.ShortcutCopy{Clipboard: w.Clipboard()})
+				}
+			}
 		}),
 		fyne.NewMenuItem("Paste", func() {
-			if c := w.Canvas(); c != nil { if foc, ok := c.Focused().(*widget.Entry); ok { foc.TypedShortcut(&fyne.ShortcutPaste{Clipboard: w.Clipboard()}) } }
+			if c := w.Canvas(); c != nil {
+				if foc, ok := c.Focused().(*widget.Entry); ok {
+					foc.TypedShortcut(&fyne.ShortcutPaste{Clipboard: w.Clipboard()})
+				}
+			}
 		}),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Find", func() { find(editor, w) }),
+		fyne.NewMenuItem("Find", func() { editor.find(w) }),
 	)
 
 	viewMenu := fyne.NewMenu("View",
 		fyne.NewMenuItem("Toggle Left Sidebar", func() {
 			toggleLeft = !toggleLeft
-			if toggleLeft { leftPane.Show() } else { leftPane.Hide() }
+			if toggleLeft {
+				leftPane.Show()
+			} else {
+				leftPane.Hide()
+			}
 		}),
 		fyne.NewMenuItem("Toggle Right Sidebar", func() {
 			toggleRight = !toggleRight
-			if toggleRight { rightPane.Show() } else { rightPane.Hide() }
+			if toggleRight {
+				rightPane.Show()
+			} else {
+				rightPane.Hide()
+			}
 		}),
 		fyne.NewMenuItem("Reset Panes", func() {
-			leftPane.Show(); rightPane.Show();
-			centerSplit.Offset = 0.25; mainSplit.Offset = 0.75
+			leftPane.Show()
+			rightPane.Show()
+			centerSplit.Offset = 0.25
+			mainSplit.Offset = 0.75
 		}),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Light Theme", func() { a.Settings().SetTheme(&smallTheme{base: theme.LightTheme()}) }),
@@ -161,7 +187,7 @@ func Run() error {
 
 // fileTree builds a filesystem tree rooted at the given directory and loads
 // file content into the provided editor on selection.
-func fileTree(root string, editor *widget.Entry, w fyne.Window) *widget.Tree {
+func fileTree(root string, e *TextEditor, w fyne.Window) *widget.Tree {
 	child := func(uid string) []string {
 		// uid is a full path
 		entries, err := os.ReadDir(uid)
@@ -228,8 +254,8 @@ func fileTree(root string, editor *widget.Entry, w fyne.Window) *widget.Tree {
 				dialog.ShowError(err, w)
 				return
 			}
-			editor.SetText(string(b))
-			currentPath = uid
+			e.editor.SetText(string(b))
+			e.currentPath = uid
 		}
 	}
 	return t
