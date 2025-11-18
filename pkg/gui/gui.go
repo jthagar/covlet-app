@@ -51,20 +51,6 @@ func Run() error {
 
 	// ensure templates directory exists and helper to compute left/right roots
 	_, _ = config.EnsureTemplatesDir()
-	computeRoots := func() (string, string) {
-		root := config.TemplatesDir()
-		left := root
-		right := root
-		base := filepath.Join(root, "base")
-		if fi, err := os.Stat(base); err == nil && fi.IsDir() {
-			left = base
-		}
-		partials := filepath.Join(root, "partials")
-		if fi, err := os.Stat(partials); err == nil && fi.IsDir() {
-			right = partials
-		}
-		return left, right
-	}
 
 	// trees and panes
 	lRoot, rRoot := computeRoots()

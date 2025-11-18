@@ -2,9 +2,12 @@ package gui
 
 import (
 	"bytes"
+	"cover-letter-templates/pkg/config"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -17,6 +20,21 @@ type Char struct {
 	Char string
 	Row  int
 	Col  int
+}
+
+func computeRoots() (string, string) {
+	root := config.TemplatesDir()
+	left := root
+	right := root
+	base := filepath.Join(root, "base")
+	if fi, err := os.Stat(base); err == nil && fi.IsDir() {
+		left = base
+	}
+	partials := filepath.Join(root, "partials")
+	if fi, err := os.Stat(partials); err == nil && fi.IsDir() {
+		right = partials
+	}
+	return left, right
 }
 
 func (e *TextEditor) undo() {

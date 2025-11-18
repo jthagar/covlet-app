@@ -92,11 +92,12 @@ func NewEditor(w fyne.Window) (*fyne.Container, *TextEditor) {
 			fmt.Printf("error rendering template: %v", err)
 			return
 		}
-		// todo: render to new bottom window (idfk)
+		// todo: render to new bottom window (idk)
 		text := widget.NewMultiLineEntry()
 		text.SetText(string(r))
-		rContent := container.NewWithoutLayout(text)
+		rContent := container.NewBorder(nil, nil, nil, nil, text)
 		rWindow := fyne.CurrentApp().NewWindow("Rendered Cover Letter")
+		rWindow.SetMainMenu(renderMenu(rWindow))
 		rWindow.SetContent(rContent)
 		rWindow.Resize(fyne.NewSize(1000, 700))
 		rWindow.Show()
