@@ -1,8 +1,8 @@
 package gui
 
 import (
-	"cover-letter-templates/pkg/config"
-	"cover-letter-templates/pkg/internal"
+	"covlet/pkg/config"
+	"covlet/pkg/internal"
 	"fmt"
 	"text/template"
 

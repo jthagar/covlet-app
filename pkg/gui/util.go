@@ -2,7 +2,7 @@ package gui
 
 import (
 	"bytes"
-	"cover-letter-templates/pkg/config"
+	"covlet/pkg/config"
 	"fmt"
 	"io/ioutil"
 	"log"

@@ -1,7 +1,7 @@
 package gui
 
 import (
-	"cover-letter-templates/pkg/config"
+	"covlet/pkg/config"
 	"fmt"
 	"image/color"
 	"io"

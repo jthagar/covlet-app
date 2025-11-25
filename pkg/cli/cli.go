@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"cover-letter-templates/pkg/config"
+	"covlet/pkg/config"
 	"fmt"
 	"github.com/urfave/cli/v2"
 	"log"

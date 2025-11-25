@@ -1,4 +1,4 @@
-module cover-letter-templates
+module covlet
 
 go 1.24.5
 

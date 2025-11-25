@@ -1,7 +1,7 @@
 package main
 
 import (
-	"cover-letter-templates/pkg/gui"
+	"covlet/pkg/gui"
 	"log"
 )
 
