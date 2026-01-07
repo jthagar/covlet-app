@@ -13,6 +13,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Get dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends bc clang lld libgl1-mesa-dev libwayland-dev libx11-dev libxkbcommon-dev xorg-dev xvfb language-pack-en
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=-fuse-ld=lld" >> "$GITHUB_ENV"
+        if: ${{ runner.os == 'Linux' }}
+
+      - name: Set environment variable LANG
+        run: export LANG=en_EN.UTF-8
+        if: ${{ runner.os == 'Linux' }}
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
