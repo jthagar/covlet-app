@@ -30,8 +30,12 @@ type TextEditor struct {
 
 // NewEditor returns the editor container and the underlying text entry widget
 func NewEditor(w fyne.Window) (*fyne.Container, *TextEditor) {
-	// TODO: modify this section into the active template editor
-	editor := newEditor()
+    // TODO(structure): Consider extracting TextEditor into its own file with an
+    // interface (e.g., EditorView) for actions (save, undo, redo, find) so the
+    // GUI layer depends on abstractions. This would ease unit testing and
+    // enable alternative editor implementations later.
+    // TODO: modify this section into the active template editor
+    editor := newEditor()
 
 	// ctrl + S to Save
 	ctrlS := desktop.CustomShortcut{KeyName: fyne.KeyS, Modifier: fyne.KeyModifierControl}
