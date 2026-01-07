@@ -3,6 +3,7 @@ module covlet
 go 1.24.5
 
 require (
+	codeberg.org/go-pdf/fpdf v0.11.1
 	fyne.io/fyne/v2 v2.7.0
 	github.com/urfave/cli/v2 v2.27.7
 	gopkg.in/yaml.v3 v3.0.1

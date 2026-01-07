@@ -4,7 +4,6 @@ import (
 	"covlet/pkg/config"
 	"fmt"
 	"image/color"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -223,6 +222,7 @@ func fileTree(root string, e *TextEditor, w fyne.Window) *widget.Tree {
 		}
 	}
 
+	// todo: figure out how to create animation showing brief selection and highlight of a file option
 	t = widget.NewTree(child, isBranch, create, update)
 	t.Root = root
 	// Filter only template-like files for selection
@@ -242,8 +242,14 @@ func fileTree(root string, e *TextEditor, w fyne.Window) *widget.Tree {
 			}
 			e.editor.SetText(string(b))
 			e.currentPath = uid
+			// refresh variable sidebar to reflect newly loaded content
+			e.refreshVarSidebar()
 		}
+		// add in auto-unselect to allow options to be re-selected
+		// this also should mean any unsaved editor changes will get overwritten even if the same file gets re-selected
+		t.Unselect(uid)
 	}
+
 	return t
 }
 
@@ -285,42 +291,4 @@ func showCreateFileDialog(w fyne.Window, dir string, t *widget.Tree) {
 			// optionally select the new file to make it visible
 			t.Select(full)
 		}, w)
-}
-
-func NewFileDialog(context fyne.App) {
-	window := context.NewWindow("File Explorer")
-	fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-		if err != nil {
-			fmt.Println("Error", err)
-			window.Close()
-			return
-		}
-		if reader == nil {
-			fmt.Println("No File Selected")
-			window.Close()
-			return
-		}
-		fmt.Println("File Selected: ", reader.URI())
-
-		// read file content
-		data, err := io.ReadAll(reader)
-		defer reader.Close()
-
-		if err != nil {
-			fmt.Println("Error reading file", err)
-			window.Close()
-			return
-		}
-		fmt.Println("File Content: ", string(data))
-		window.Close()
-		return
-
-	}, window)
-
-	windowSize := fyne.NewSize(800, 600)
-	window.Resize(windowSize)
-
-	window.Show()
-	fileDialog.Show()
-	fileDialog.Resize(windowSize)
 }

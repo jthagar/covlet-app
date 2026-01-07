@@ -1,12 +1,12 @@
 package config
 
 import (
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
+    "errors"
+    "fmt"
+    "os"
+    "path/filepath"
 
-	"gopkg.in/yaml.v3"
+    "gopkg.in/yaml.v3"
 )
 
 // Resume holds all the information from the YAML file.
@@ -61,17 +61,25 @@ var mainDir string
 // InitMainDir initializes the app main directory using environment or current working dir.
 // Environment variable: COVLET_HOME
 func InitMainDir() {
-	if md := os.Getenv("COVLET_HOME"); md != "" {
-		if abs, err := filepath.Abs(md); err == nil {
-			if info, err2 := os.Stat(abs); err2 == nil && info.IsDir() {
-				mainDir = abs
-				return
-			}
-		}
-	}
-	if cwd, err := os.Getwd(); err == nil {
-		mainDir = cwd
-	}
+    if md := os.Getenv("COVLET_HOME"); md != "" {
+        if abs, err := filepath.Abs(md); err == nil {
+            if info, err2 := os.Stat(abs); err2 == nil && info.IsDir() {
+                mainDir = abs
+                return
+            }
+        }
+    }
+    // Default to a directory in the user's home: ~/.local/share/covlet
+    if home, err := os.UserHomeDir(); err == nil {
+        def := filepath.Join(home, ".local", "share", "covlet")
+        _ = os.MkdirAll(def, 0o755)
+        mainDir = def
+        return
+    }
+    // Fallback to current working directory
+    if cwd, err := os.Getwd(); err == nil {
+        mainDir = cwd
+    }
 }
 
 // SetMainDir sets the application's main directory; must exist and be a directory.
@@ -104,12 +112,12 @@ func GetMainDir() string {
 
 // TemplatesDir returns the path to the templates root inside the main dir.
 func TemplatesDir() string {
-	return filepath.Join(GetMainDir(), "templates")
+    return filepath.Join(GetMainDir(), "templates")
 }
 
 // EnsureTemplatesDir makes sure the templates directory exists.
 func EnsureTemplatesDir() (string, error) {
-	dir := TemplatesDir()
+    dir := TemplatesDir()
 	if fi, err := os.Stat(dir); err != nil {
 		if os.IsNotExist(err) {
 			if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
@@ -122,6 +130,42 @@ func EnsureTemplatesDir() (string, error) {
 		return dir, fmt.Errorf("templates path exists but is not a directory: %s", dir)
 	}
 	return dir, nil
+}
+
+// ValuesDir returns the directory where values (YAML) can be stored.
+func ValuesDir() string {
+    return filepath.Join(GetMainDir(), "values")
+}
+
+// EnsureValuesDir creates the values directory if needed.
+func EnsureValuesDir() (string, error) {
+    dir := ValuesDir()
+    if fi, err := os.Stat(dir); err != nil {
+        if os.IsNotExist(err) {
+            if mkErr := os.MkdirAll(dir, 0o755); mkErr != nil {
+                return dir, mkErr
+            }
+            return dir, nil
+        }
+        return dir, err
+    } else if !fi.IsDir() {
+        return dir, fmt.Errorf("values path exists but is not a directory: %s", dir)
+    }
+    return dir, nil
+}
+
+// EnsureDownloadsCovletDir returns the default output directory for exported PDFs.
+// On Linux it will be: ~/Downloads/covlet
+func EnsureDownloadsCovletDir() (string, error) {
+    home, err := os.UserHomeDir()
+    if err != nil {
+        return "", err
+    }
+    dir := filepath.Join(home, "Downloads", "covlet")
+    if err := os.MkdirAll(dir, 0o755); err != nil {
+        return "", err
+    }
+    return dir, nil
 }
 
 // TODO: figure out why URLs don't work for the template generator

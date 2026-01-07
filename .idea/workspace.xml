@@ -5,14 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="50b87a46-d926-42fd-aa9a-7bda9d81e766" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/cli/cli.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/cli/cli.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/gui/editor.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/gui/editor.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pkg/gui/gui.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/gui/gui.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pkg/gui/util.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/gui/util.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/gui/menu.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/gui/menu.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/internal/templates.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/internal/templates.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/templates/base/cover_letter.tpl" beforeDir="false" afterPath="$PROJECT_DIR$/templates/base/cover_letter.tpl" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -73,8 +75,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-gosdk-f466f9b0953e-146d08934cbf-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-252.27397.100" />
-        <option value="bundled-js-predefined-d6986cc7102b-3aa1da707db6-JavaScript-GO-252.27397.100" />
+        <option value="bundled-gosdk-f466f9b0953e-61a6b8fd16fd-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-252.28238.32" />
+        <option value="bundled-js-predefined-d6986cc7102b-a71380e98a7c-JavaScript-GO-252.28238.32" />
       </set>
     </attachedChunks>
   </component>
